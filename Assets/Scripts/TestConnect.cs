@@ -10,7 +10,8 @@ public class TestConnect : MonoBehaviourPunCallbacks
     // Start is called before the first frame update
     void Start()
     {
-        print("Connecting to server!!!");
+        print("Connecting to server");
+        PhotonNetwork.AutomaticallySyncScene = true;
         PhotonNetwork.NickName = MasterManager.GameSettings.NickName;
         PhotonNetwork.GameVersion = MasterManager.GameSettings.GameVersion;
         PhotonNetwork.ConnectUsingSettings();

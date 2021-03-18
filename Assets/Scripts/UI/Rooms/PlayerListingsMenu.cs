@@ -3,18 +3,35 @@ using System.Collections.Generic;
 using Photon.Pun;
 using Photon.Realtime;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class PlayerListingsMenu : MonoBehaviourPunCallbacks
 {
     [SerializeField] private PlayerListing _playerListingPrefab = null;
     [SerializeField] private Transform _content = null;
+    [SerializeField] private Text _readyUpText = null;
+
     private RoomsCanvases _roomsCanvases;
 
     private List<PlayerListing> _listings = new List<PlayerListing>();
+    private bool _ready = false;
 
     private void Awake()
     {
         GetCurrentRoomPlayers();
+    }
+
+    public override void OnEnable()
+    {
+        base.OnEnable();
+        SetReadyUp(false);
+    }
+
+    private void SetReadyUp(bool state)
+    {
+        _ready = state;
+        if (_ready) _readyUpText.text = "R";
+        else _readyUpText.text = "N";
     }
 
     public override void OnDisable()
@@ -35,6 +52,8 @@ public class PlayerListingsMenu : MonoBehaviourPunCallbacks
 
     private void GetCurrentRoomPlayers()
     {
+        if (!PhotonNetwork.IsConnected) return;
+        if (PhotonNetwork.CurrentRoom == null || PhotonNetwork.CurrentRoom.Players == null) return;
         foreach (KeyValuePair<int, Player> playerInfo in PhotonNetwork.CurrentRoom.Players)
         {
             AddPlayerListing(playerInfo.Value);
@@ -46,17 +65,22 @@ public class PlayerListingsMenu : MonoBehaviourPunCallbacks
         int index = _listings.FindIndex(x => x.Player == player);
         if (index != -1)
         {
-            _listings[index].SetPlayerInfo(player);
+            if (player != null) _listings[index].SetPlayerInfo(player);
         }
         else
         {
             PlayerListing listing = Instantiate(_playerListingPrefab, _content);
             if (listing != null)
             {
-                listing.SetPlayerInfo(player);
+                if (player != null) listing.SetPlayerInfo(player);
                 _listings.Add(listing);
             }
         }
+    }
+
+    public override void OnMasterClientSwitched(Player newMasterClient)
+    {
+        _roomsCanvases.CurrentRoomCanvas.LeaveRoomMenu.OnClickLeaveRoom();
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
@@ -78,5 +102,42 @@ public class PlayerListingsMenu : MonoBehaviourPunCallbacks
     // {
     //     _content.DestroyChildren();
     // }
+
+    public void OnClickStartGame()
+    {
+        if (PhotonNetwork.IsMasterClient)
+        {
+            for (int i = 0; i < _listings.Count; i++)
+            {
+                if (_listings[i].Player != PhotonNetwork.LocalPlayer)
+                {
+                    if (!_listings[i].Ready) return;
+                }
+            }
+
+            PhotonNetwork.CurrentRoom.IsOpen = false;
+            PhotonNetwork.CurrentRoom.IsVisible = false;
+            PhotonNetwork.LoadLevel(1);
+        }
+    }
+
+    public void OnClickReadyUp()
+    {
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            SetReadyUp(!_ready);
+            base.photonView.RPC(nameof(RPC_ChangeReadyState), RpcTarget.MasterClient, PhotonNetwork.LocalPlayer, _ready);
+        }
+    }
+
+    [PunRPC]
+    private void RPC_ChangeReadyState(Player player, bool ready)
+    {
+        int index = _listings.FindIndex(x => x.Player == player);
+        if (index != -1)
+        {
+            _listings[index].Ready = ready;
+        }
+    }
 
 }
